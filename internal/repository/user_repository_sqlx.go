@@ -13,6 +13,16 @@ type userRepo struct {
 	db *sqlx.DB
 }
 
+// UpdatePassword implements [UserRepository].
+func (u *userRepo) UpdatePassword(ctx context.Context, id uuid.UUID, passwordHash string) error {
+	query := "UPDATE users SET password_hash = $1, updated_at = NOW() WHERE id = $2"
+	_, err := u.db.ExecContext(ctx, query, passwordHash, id)
+	if err != nil {
+		return fmt.Errorf("failed to update password: %w", err)
+	}
+	return nil
+}
+
 func NewUserRepositiory(db *sqlx.DB) UserRepository {
 	return &userRepo{db: db}
 }
@@ -35,7 +45,7 @@ func (u *userRepo) FindMyEmail(ctx context.Context, emailID string) (*model.User
 	query := "SELECT * from users where email=$1 LIMIT 1"
 	user := &model.User{}
 	err := u.db.GetContext(ctx, user, query)
-	return *user, err
+	return user, err
 }
 
 func (r *userRepo) FindById(ctx context.Context, id uuid.UUID) (*model.User, error) {

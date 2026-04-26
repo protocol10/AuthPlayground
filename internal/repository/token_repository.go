@@ -2,6 +2,7 @@ package repository
 
 import (
 	"context"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/jmoiron/sqlx"
@@ -10,6 +11,46 @@ import (
 
 type tokenRepo struct {
 	db *sqlx.DB
+}
+
+// DeleteExpiredEmailVerifications implements [TokenRepository].
+func (t *tokenRepo) DeleteExpiredEmailVerifications(ctx context.Context) error {
+	_, err := t.db.Exec(`DELETE FROM email_verifications WHERE expires_at < $1`, time.Now())
+	return err
+}
+
+// DeleteExpiredPasswordResets implements [TokenRepository].
+func (t *tokenRepo) DeleteExpiredPasswordResets(ctx context.Context) error {
+	_, err := t.db.Exec(`DELETE FROM password_resets WHERE expires_at < $1`, time.Now())
+	return err
+}
+
+// DeleteExpiredRefreshTokens implements [TokenRepository].
+func (t *tokenRepo) DeleteExpiredRefreshTokens(ctx context.Context) error {
+	_, err := t.db.Exec(`DELETE FROM refresh_tokens WHERE (expires_at < $1 AND revoked = true)`, time.Now())
+	return err
+}
+
+// CreatePasswordReset implements [TokenRepository].
+func (t *tokenRepo) CreatePasswordReset(ctx context.Context, pr *model.PasswordReset) error {
+	query := `INSERT INTO password_resets (id, user_id, token, expires_at)
+              VALUES ($1, $2, $3, $4)`
+	_, err := t.db.ExecContext(ctx, query, pr.ID, pr.UserID, pr.Token, pr.ExpiresAt)
+	return err
+}
+
+// FindValidPasswordReset implements [TokenRepository].
+func (t *tokenRepo) FindValidPasswordReset(ctx context.Context, token string) (*model.PasswordReset, error) {
+	query := `SELECT * FROM password_resets WHERE token = $1 AND expires_at > NOW() AND used = false`
+	pr := &model.PasswordReset{}
+	err := t.db.GetContext(ctx, pr, query, token)
+	return pr, err
+}
+
+// MarkPasswordResetUsed implements [TokenRepository].
+func (t *tokenRepo) MarkPasswordResetUsed(ctx context.Context, id uuid.UUID) error {
+	_, err := t.db.ExecContext(ctx, `UPDATE password_resets SET used = true WHERE id = $1`, id)
+	return err
 }
 
 // CreateEmailVerification implements [TokenRepository].
